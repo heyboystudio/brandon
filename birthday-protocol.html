@@ -1,0 +1,1572 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE BIRTHDAY PROTOCOL</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #050505;
+            --green: #00ff9c;
+            --green-dim: #00cc7a;
+            --green-glow: rgba(0, 255, 156, 0.4);
+            --amber: #ffaa00;
+            --red: #ff3366;
+            --cyan: #00d9ff;
+            --purple: #aa00ff;
+            --text: #e0e0e0;
+            --text-dim: #666666;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        body {
+            font-family: ui-monospace, 'SF Mono', Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', monospace;
+            background: var(--bg);
+            color: var(--green);
+            min-height: 100vh;
+            padding: 20px;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Matrix rain background */
+        #matrix-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.15;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* Scanlines */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, transparent 50%, rgba(0, 0, 0, 0.05) 51%);
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0.3;
+        }
+
+        body.no-effects::before,
+        body.no-effects #matrix-canvas {
+            display: none;
+        }
+
+        .game-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 10;
+        }
+
+        .game-header {
+            border: 2px solid var(--green-dim);
+            border-bottom: none;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+            background: rgba(0, 255, 156, 0.05);
+            box-shadow: 0 0 20px rgba(0, 255, 156, 0.1);
+        }
+
+        .game-screen {
+            border: 2px solid var(--green-dim);
+            min-height: 500px;
+            background: rgba(5, 5, 5, 0.95);
+            box-shadow: 0 0 40px var(--green-glow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .scene-content {
+            padding: 40px;
+            position: relative;
+        }
+
+        /* Visual panels */
+        .panel {
+            border: 2px solid var(--green);
+            padding: 24px;
+            margin: 20px 0;
+            background: rgba(0, 255, 156, 0.03);
+            box-shadow: 0 0 20px rgba(0, 255, 156, 0.2);
+            position: relative;
+        }
+
+        .panel::before {
+            content: '▸';
+            position: absolute;
+            top: -12px;
+            left: 20px;
+            background: var(--bg);
+            padding: 0 10px;
+            color: var(--green);
+            font-size: 1.2rem;
+        }
+
+        .panel-title {
+            color: var(--green);
+            font-size: 1.2rem;
+            margin-bottom: 16px;
+            text-shadow: 0 0 10px var(--green-glow);
+        }
+
+        /* ASCII art styling */
+        .ascii-art {
+            color: var(--green);
+            line-height: 1.1;
+            white-space: pre;
+            font-size: 0.65rem;
+            text-align: center;
+            margin: 20px 0;
+            text-shadow: 0 0 10px var(--green-glow);
+            animation: glow-pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes glow-pulse {
+
+            0%,
+            100% {
+                text-shadow: 0 0 10px var(--green-glow);
+            }
+
+            50% {
+                text-shadow: 0 0 20px var(--green-glow), 0 0 30px var(--green-glow);
+            }
+        }
+
+        .ascii-small {
+            font-size: 0.5rem;
+        }
+
+        .ascii-large {
+            font-size: 0.8rem;
+        }
+
+        /* Animations */
+        @keyframes glitch {
+            0% {
+                transform: translate(0);
+            }
+
+            20% {
+                transform: translate(-2px, 2px);
+                filter: hue-rotate(90deg);
+            }
+
+            40% {
+                transform: translate(-2px, -2px);
+            }
+
+            60% {
+                transform: translate(2px, 2px);
+                filter: hue-rotate(-90deg);
+            }
+
+            80% {
+                transform: translate(2px, -2px);
+            }
+
+            100% {
+                transform: translate(0);
+            }
+        }
+
+        .glitch-text {
+            animation: glitch 0.3s;
+        }
+
+        @keyframes slide-in {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .slide-in {
+            animation: slide-in 0.6s ease-out;
+        }
+
+        @keyframes fade-in {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .fade-in {
+            animation: fade-in 0.6s ease-out;
+        }
+
+        /* Loading bar */
+        .loading-bar {
+            width: 100%;
+            height: 20px;
+            border: 1px solid var(--green);
+            margin: 16px 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .loading-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--green), var(--cyan));
+            width: 0%;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 20px var(--green-glow);
+        }
+
+        /* Choice cards */
+        .choice-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 24px 0;
+        }
+
+        .choice-card {
+            border: 2px solid var(--text-dim);
+            padding: 24px;
+            background: rgba(0, 0, 0, 0.5);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .choice-card:hover {
+            border-color: var(--green);
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 8px 30px var(--green-glow);
+            background: rgba(0, 255, 156, 0.1);
+        }
+
+        .choice-card .icon {
+            font-size: 3rem;
+            margin-bottom: 12px;
+            text-align: center;
+            filter: drop-shadow(0 0 10px var(--green-glow));
+        }
+
+        .choice-card .title {
+            color: var(--green);
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        .choice-card .desc {
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        /* Numbered choices */
+        .choice-list {
+            margin: 20px 0;
+        }
+
+        .choice-item {
+            margin: 12px 0;
+            padding: 12px 16px;
+            border-left: 3px solid var(--text-dim);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .choice-item:hover {
+            border-left-color: var(--green);
+            background: rgba(0, 255, 156, 0.08);
+            padding-left: 24px;
+            box-shadow: 0 0 15px rgba(0, 255, 156, 0.2);
+        }
+
+        .choice-number {
+            color: var(--green);
+            font-weight: 700;
+            margin-right: 12px;
+            font-size: 1.1rem;
+        }
+
+        /* Input styling */
+        .prompt {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+            align-items: center;
+            padding: 16px;
+            border: 1px solid var(--green-dim);
+            background: rgba(0, 255, 156, 0.05);
+        }
+
+        .prompt-symbol {
+            color: var(--green);
+            font-weight: 700;
+            font-size: 1.2rem;
+            animation: pulse-symbol 1.5s infinite;
+        }
+
+        @keyframes pulse-symbol {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .prompt input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--green);
+            font-family: inherit;
+            font-size: 1.1rem;
+            outline: none;
+            caret-color: var(--green);
+        }
+
+        .prompt input::placeholder {
+            color: var(--text-dim);
+            opacity: 0.6;
+        }
+
+        /* Message styling */
+        .message {
+            margin: 12px 0;
+            line-height: 1.7;
+            animation: fade-in 0.4s ease-out;
+        }
+
+        .message.system {
+            color: var(--text-dim);
+        }
+
+        .message.success {
+            color: var(--green);
+            font-weight: 600;
+        }
+
+        .message.error {
+            color: var(--red);
+        }
+
+        .message.warning {
+            color: var(--amber);
+        }
+
+        .message.highlight {
+            color: var(--green);
+            font-weight: 700;
+            text-shadow: 0 0 10px var(--green-glow);
+        }
+
+        .message.roast {
+            color: var(--purple);
+            font-style: italic;
+        }
+
+        /* Continue button */
+        .continue-btn {
+            display: inline-block;
+            margin: 20px 0;
+            padding: 14px 32px;
+            background: linear-gradient(135deg, var(--green), var(--cyan));
+            color: var(--bg);
+            font-weight: 700;
+            font-size: 1.05rem;
+            border: 2px solid var(--green);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 20px var(--green-glow);
+            animation: pulse-glow 2s ease-in-out infinite;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .continue-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 30px var(--green-glow), 0 4px 15px rgba(0, 0, 0, 0.5);
+            border-color: var(--cyan);
+        }
+
+        .continue-btn:active {
+            transform: translateY(0);
+        }
+
+        .continue-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        @keyframes pulse-glow {
+
+            0%,
+            100% {
+                box-shadow: 0 0 20px var(--green-glow);
+            }
+
+            50% {
+                box-shadow: 0 0 30px var(--green-glow);
+            }
+        }
+
+        /* Split screen */
+        .split-screen {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 24px 0;
+        }
+
+        .split-panel {
+            border: 2px solid var(--text-dim);
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .split-panel:hover {
+            border-color: var(--green);
+            transform: scale(1.05);
+            box-shadow: 0 0 30px var(--green-glow);
+        }
+
+        .split-panel.tactical {
+            border-color: var(--cyan);
+        }
+
+        .split-panel.tactical:hover {
+            border-color: var(--cyan);
+            box-shadow: 0 0 30px rgba(0, 217, 255, 0.4);
+        }
+
+        .split-panel.chaotic {
+            border-color: var(--purple);
+        }
+
+        .split-panel.chaotic:hover {
+            border-color: var(--purple);
+            box-shadow: 0 0 30px rgba(170, 0, 255, 0.4);
+        }
+
+        /* Stats display */
+        .stats-display {
+            display: flex;
+            gap: 24px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .stat-badge {
+            border: 2px solid var(--green);
+            padding: 12px 20px;
+            background: rgba(0, 255, 156, 0.05);
+            font-size: 0.95rem;
+        }
+
+        .stat-value {
+            color: var(--green);
+            font-weight: 700;
+            font-size: 1.2rem;
+        }
+
+        /* Divider */
+        .divider {
+            margin: 32px 0;
+            border-top: 1px solid var(--text-dim);
+            opacity: 0.3;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .scene-content {
+                padding: 24px;
+            }
+
+            .choice-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .split-screen {
+                grid-template-columns: 1fr;
+            }
+
+            .ascii-art {
+                font-size: 0.45rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="matrix-canvas"></canvas>
+
+    <div class="game-container">
+        <div class="game-header">
+            <span>BIRTHDAY_PROTOCOL v2.0.26 | CLASSIFIED</span>
+            <span id="headerStatus">STANDBY</span>
+        </div>
+        <div class="game-screen">
+            <div class="scene-content" id="gameContent">
+                <!-- Game renders here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // CONFIG - EDIT THIS SECTION
+        // ========================================
+        const CONFIG = {
+            brotherName: "Brandon",
+            fullName: "Brandon Anthony Michaels",
+            birthday: "January 18, 1999",
+            age: 27,
+            nicknames: ["Brandy"],
+            compliments: [
+                "You actually make really good food despite seeming useless in the kitchen—it's one of those hidden talents that always surprises people.",
+                "You care deeply about others, whether it's siblings or the car guards asking you for change. That kind of genuine compassion is rare.",
+                "The way you always tell us 'hey sibs, have a good day. I love you'—that daily reminder means more than you probably realize."
+            ],
+            memoryQuestion: {
+                text: "Remember our running joke about leaving a piece of chicken under the bed?",
+                options: [
+                    "Yeah, we save it for later so it grows into more chicken",
+                    "No, we never had that joke",
+                    "It was about pizza, not chicken"
+                ],
+                correctIndex: 0
+            },
+            yearAheadWishes: [
+                "A year where you finally get your dream car",
+                "A year where you no longer have to go to Paris (if you still don't want to) and Shirley gives you minimal problems",
+                "A year filled with unexpected wins, genuine happiness, and everything falling into place"
+            ],
+            finalMessage: "Happy 27th Birthday, Brandy! Another year, another level unlocked. You've got this rare combo of being hilarious, caring, and genuinely talented (yes, even in the kitchen). I'm grateful to have you as my brother and I hope this year brings you everything you're hoping for—the dream car, freedom from unwanted trips, and a Mercedes that actually behaves. Here's to more inside jokes, daily 'I love yous,' and being the best sibling I could ask for. Enjoy your day, you've earned it!",
+            rewardLinkText: "📸 View Our Memories Together",
+            rewardURL: "photos.html"
+        };
+        // ========================================
+        // END CONFIG
+        // ========================================
+
+        let state = {
+            brotherName: CONFIG.brotherName,
+            nickname: "",
+            playerCodename: "",
+            loadout: "",
+            tone: "",
+            keys: 0,
+            points: 0,
+            currentScene: 0,
+            typewriterEnabled: true,
+            effectsEnabled: true,
+            awaitingInput: false,
+            inputCallback: null
+        };
+
+        const gameContent = document.getElementById('gameContent');
+        const headerStatus = document.getElementById('headerStatus');
+        let currentInput = null;
+
+        // Matrix rain effect
+        function initMatrixRain() {
+            if (!state.effectsEnabled) return;
+
+            const canvas = document.getElementById('matrix-canvas');
+            const ctx = canvas.getContext('2d');
+
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
+            const fontSize = 14;
+            const columns = canvas.width / fontSize;
+            const drops = Array(Math.floor(columns)).fill(1);
+
+            function draw() {
+                ctx.fillStyle = 'rgba(5, 5, 5, 0.05)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = '#00ff9c';
+                ctx.font = fontSize + 'px monospace';
+
+                for (let i = 0; i < drops.length; i++) {
+                    const text = chars[Math.floor(Math.random() * chars.length)];
+                    ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+                    if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                        drops[i] = 0;
+                    }
+                    drops[i]++;
+                }
+            }
+
+            setInterval(draw, 33);
+        }
+
+        // State management
+        function saveState() {
+            localStorage.setItem('birthdayProtocolState', JSON.stringify(state));
+        }
+
+        function loadState() {
+            const saved = localStorage.getItem('birthdayProtocolState');
+            if (saved) {
+                state = { ...state, ...JSON.parse(saved) };
+            }
+        }
+
+        function resetProtocol() {
+            localStorage.removeItem('birthdayProtocolState');
+            location.reload();
+        }
+
+        // Utility functions
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function updateStatus(status) {
+            headerStatus.textContent = status;
+        }
+
+        function addKey() {
+            state.keys++;
+            state.points += 100;
+            saveState();
+        }
+
+        function addPoints(points) {
+            state.points += points;
+            saveState();
+        }
+
+        // Visual functions
+        function clearScreen() {
+            gameContent.innerHTML = '';
+        }
+
+        function addMessage(text, type = '') {
+            const msg = document.createElement('div');
+            msg.className = `message ${type}`;
+            msg.textContent = text;
+            gameContent.appendChild(msg);
+            gameContent.scrollTop = gameContent.scrollHeight;
+        }
+
+        function addHTML(html) {
+            const div = document.createElement('div');
+            div.innerHTML = html;
+            gameContent.appendChild(div);
+            gameContent.scrollTop = gameContent.scrollHeight;
+        }
+
+        function showContinueButton(callback) {
+            addHTML(`
+                <div style="text-align: center; margin: 24px 0;">
+                    <button class="continue-btn" onclick="this.disabled=true; continueCallback()">
+                        CONTINUE →
+                    </button>
+                </div>
+            `);
+            window.continueCallback = callback;
+        }
+
+        function showLoadingBar(duration, message) {
+            return new Promise(resolve => {
+                const barId = 'loadBar' + Date.now();
+                addMessage(message, 'system');
+                addHTML(`
+                    <div class="loading-bar">
+                        <div class="loading-fill" id="${barId}"></div>
+                    </div>
+                `);
+
+                const bar = document.getElementById(barId);
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += 5;
+                    bar.style.width = progress + '%';
+                    if (progress >= 100) {
+                        clearInterval(interval);
+                        setTimeout(resolve, 200);
+                    }
+                }, duration / 20);
+            });
+        }
+
+        async function typeMessage(text, type = '', speed = 20) {
+            if (!state.typewriterEnabled) {
+                addMessage(text, type);
+                return;
+            }
+
+            const msg = document.createElement('div');
+            msg.className = `message ${type}`;
+            gameContent.appendChild(msg);
+
+            for (let char of text) {
+                msg.textContent += char;
+                gameContent.scrollTop = gameContent.scrollHeight;
+                await sleep(speed);
+            }
+        }
+
+        function createPrompt(symbol, placeholder, callback) {
+            if (currentInput) {
+                currentInput.remove();
+            }
+
+            const promptDiv = document.createElement('div');
+            promptDiv.className = 'prompt';
+            promptDiv.innerHTML = `
+                <span class="prompt-symbol">${symbol}</span>
+                <input type="text" placeholder="${placeholder}" autocomplete="off" spellcheck="false">
+            `;
+
+            gameContent.appendChild(promptDiv);
+            currentInput = promptDiv;
+
+            const input = promptDiv.querySelector('input');
+            input.focus();
+            gameContent.scrollTop = gameContent.scrollHeight;
+
+            input.addEventListener('keydown', async (e) => {
+                if (e.key === 'Enter') {
+                    const value = input.value.trim();
+                    input.disabled = true;
+
+                    addMessage(`${symbol} ${value}`, 'success');
+                    promptDiv.remove();
+                    currentInput = null;
+
+                    if (await handleEasterEgg(value)) {
+                        createPrompt(symbol, placeholder, callback);
+                        return;
+                    }
+
+                    if (callback) {
+                        callback(value);
+                    }
+                }
+            });
+        }
+
+        async function handleEasterEgg(input) {
+            const cmd = input.toLowerCase();
+
+            if (cmd === 'help' || cmd === '?') {
+                addMessage('Available commands: help, whoami, ls, status, reset, chicken', 'system');
+                return true;
+            }
+
+            if (cmd === 'whoami') {
+                const who = state.playerCodename || 'UNKNOWN';
+                addMessage(`CURRENT AGENT: ${who}`, 'system');
+                addMessage(`CLEARANCE LEVEL: ${state.keys}/3 KEYS`, 'system');
+                return true;
+            }
+
+            if (cmd === 'ls' || cmd === 'dir') {
+                addMessage('birthday_protocol.exe', 'system');
+                addMessage('shirley_diagnostics.log', 'system');
+                addMessage('chicken_farm.dat', 'system');
+                addMessage('classified_compliments.txt', 'system');
+                addMessage('dream_car_wishlist.pdf', 'system');
+                return true;
+            }
+
+            if (cmd === 'status') {
+                addMessage(`🔑 Keys: ${state.keys}/3  |  ⭐ Points: ${state.points}`, 'system');
+                return true;
+            }
+
+            if (cmd === 'chicken') {
+                addMessage('🐔 Checking under bed...', 'system');
+                await sleep(500);
+                addMessage('ERROR: Chicken has evolved into a full rotisserie. Harvest ready.', 'roast');
+                addPoints(50);
+                return true;
+            }
+
+            if (cmd === 'reset' || cmd === 'reboot') {
+                addMessage('INITIATING SYSTEM RESET...', 'warning');
+                await sleep(500);
+                resetProtocol();
+                return true;
+            }
+
+            return false;
+        }
+
+        // ASCII Art Library
+        const ASCII_ART = {
+            boot: `
+ ████████╗██╗  ██╗███████╗    ██████╗ ██████╗  ██████╗ ████████╗ ██████╗  ██████╗ ██████╗ ██╗     
+ ╚══██╔══╝██║  ██║██╔════╝    ██╔══██╗██╔══██╗██╔═══██╗╚══██╔══╝██╔═══██╗██╔════╝██╔═══██╗██║     
+    ██║   ███████║█████╗      ██████╔╝██████╔╝██║   ██║   ██║   ██║   ██║██║     ██║   ██║██║     
+    ██║   ██╔══██║██╔══╝      ██╔═══╝ ██╔══██╗██║   ██║   ██║   ██║   ██║██║     ██║   ██║██║     
+    ██║   ██║  ██║███████╗    ██║     ██║  ██║╚██████╔╝   ██║   ╚██████╔╝╚██████╗╚██████╔╝███████╗
+    ╚═╝   ╚═╝  ╚═╝╚══════╝    ╚═╝     ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝  ╚═════╝ ╚═════╝ ╚══════╝`,
+
+            agent: `
+            ████████
+          ██░░░░░░██
+        ██░░██░░██░░██
+        ██░░░░░░░░░░██
+          ██░░░░░░██
+          ██░░░░░░██
+        ██████████████
+      ██░░██████████░░██
+      ██░░██░░░░░░██░░██
+          ██░░░░░░██
+          ██░░░░░░██
+        ██░░██  ██░░██
+        ██░░██  ██░░██
+        ████      ████`,
+
+            gadget: `
+      ╔═══════════╗
+      ║  ⚙️  🔧  ⚡  ║
+      ║ ═════════ ║
+      ║ ▓▓▓░░░░░  ║
+      ╚═══════════╝`,
+
+            party: `
+      ✨  🎉  🎊  ✨
+       ╱╲  ╱╲  ╱╲
+      ╱  ╲╱  ╲╱  ╲
+      ╲  ╱╲  ╱╲  ╱
+       ╲╱  ╲╱  ╲╱
+      🎈  🎁  🎂  🎈`,
+
+            mystery: `
+      ╔═══════════╗
+      ║    ? ? ?  ║
+      ║   ?▓▓▓?   ║
+      ║  ?▓▓▓▓▓?  ║
+      ║   ?▓▓▓?   ║
+      ║    ? ? ?  ║
+      ╚═══════════╝`,
+
+            chicken: `
+        __
+       /  \\
+      | ^^ |
+      |(__)|
+       /  \\
+      /~~~~\\`,
+
+            birthdayCake: `
+            ║▓▓║
+            ║▓▓║
+            ║▓▓║
+        ════════════
+       ▓▓▓▓▓▓▓▓▓▓▓▓▓
+       ▓  HAPPY  27 ▓
+       ▓▓▓▓▓▓▓▓▓▓▓▓▓
+        ════════════
+       ▓▓▓▓▓▓▓▓▓▓▓▓▓
+       ▓  BIRTHDAY  ▓
+       ▓▓▓▓▓▓▓▓▓▓▓▓▓
+        ════════════`,
+
+            car: `
+            ______
+         __/  |_\_
+        |  _     _\\
+        '-(_)---(_)-'`,
+
+            fortuneTeller: `
+         ___
+       /     \\
+      | °   ° |
+      |   △   |
+       \\_____/
+         | |
+        /   \\
+       /_____\\`,
+
+            lock: `
+        ╔═══╗
+        ║ ╳ ║
+        ╠═══╣
+        ║▓▓▓║
+        ╚═══╝`
+        };
+
+        // Scene Definitions
+        const SCENES = {
+            0: async () => {
+                // Boot screen
+                clearScreen();
+                updateStatus('BOOTING');
+
+                addHTML('<div class="ascii-art fade-in">' + ASCII_ART.boot + '</div>');
+                await sleep(800);
+
+                await showLoadingBar(2000, 'INITIALIZING BIRTHDAY PROTOCOL...');
+                await sleep(200);
+                await showLoadingBar(1500, 'LOADING SHIRLEY DIAGNOSTICS...');
+                await sleep(200);
+                await showLoadingBar(1800, 'SCANNING FOR CHICKENS UNDER BED...');
+                await sleep(200);
+
+                addMessage('');
+                addMessage('⚠️  CLASSIFIED MISSION DETECTED  ⚠️', 'warning');
+                addMessage('Mission Type: BIRTHDAY CELEBRATION', 'system');
+                addMessage(`Target: ${CONFIG.fullName}`, 'system');
+                addMessage(`Date: ${CONFIG.birthday}`, 'system');
+                addMessage('');
+                addMessage('WARNING: This mission contains excessive fun, inside jokes, and potential roasts.', 'roast');
+                addMessage('Proceed with caution.', 'system');
+                addMessage('');
+                addMessage('Type "start" to begin, or "help" for Easter eggs 😏', 'highlight');
+
+                updateStatus('READY');
+
+                createPrompt('>', 'start', async (value) => {
+                    if (value.toLowerCase().includes('start') || value.toLowerCase().includes('begin')) {
+                        addMessage('PROTOCOL INITIATED.', 'success');
+                        await sleep(600);
+                        renderScene(1);
+                    } else {
+                        addMessage('ERROR: Nice try. Type "start" to begin the birthday adventure.', 'error');
+                        createPrompt('>', 'start', arguments.callee);
+                    }
+                });
+            },
+
+            1: async () => {
+                // Identity check
+                clearScreen();
+                updateStatus('IDENTITY CHECK');
+
+                addHTML('<div class="panel slide-in"><div class="panel-title">IDENTITY VERIFICATION REQUIRED</div></div>');
+                await sleep(400);
+
+                addHTML('<div class="ascii-art slide-in">' + ASCII_ART.agent + '</div>');
+                await sleep(400);
+
+                await typeMessage('Welcome, Agent. Before we proceed, we need to establish your codename.');
+                addMessage('This is a secure channel. Your real identity stays between us.', 'system');
+                addMessage('');
+                addMessage('ENTER YOUR CODENAME:', 'highlight');
+
+                createPrompt('agent>', '', async (value) => {
+                    if (!value) {
+                        addMessage('ERROR: Codename cannot be empty. Even "BirthdayBoy27" would work.', 'error');
+                        renderScene(1);
+                        return;
+                    }
+
+                    state.playerCodename = value;
+                    saveState();
+                    addPoints(50);
+
+                    const isNickname = CONFIG.nicknames.some(nick =>
+                        nick.toLowerCase() === value.toLowerCase()
+                    );
+
+                    addMessage('PROCESSING...', 'system');
+                    await sleep(600);
+
+                    if (isNickname) {
+                        addMessage(`Oh wow. "Brandy." Real creative there.`, 'roast');
+                        await sleep(500);
+                        addMessage('I see you\'re not even trying to maintain cover. Respect. 😏', 'success');
+                        addMessage('Codename accepted, though we both know who you really are.', 'system');
+                        addPoints(50); // Bonus for using nickname
+                    } else {
+                        addMessage(`CODENAME "${value}" CONFIRMED.`, 'success');
+                        addMessage('Welcome to the protocol, Agent. Let\'s see if you survive.', 'system');
+                    }
+
+                    addMessage('');
+                    addHTML(`<div class="stats-display">
+                        <div class="stat-badge">🔑 Keys: <span class="stat-value">${state.keys}/3</span></div>
+                        <div class="stat-badge">⭐ Points: <span class="stat-value">${state.points}</span></div>
+                    </div>`);
+
+                    await sleep(600);
+                    showContinueButton(() => renderScene(2));
+                });
+            },
+
+            2: async () => {
+                // Loadout selection
+                clearScreen();
+                updateStatus('LOADOUT');
+
+                addHTML('<div class="panel slide-in"><div class="panel-title">LOADOUT SELECTION</div></div>');
+                await sleep(300);
+
+                await typeMessage(`Alright, Agent ${state.playerCodename}. Every mission needs the right gear.`);
+                addMessage('Choose wisely. This might actually matter. Or not. Who knows?', 'system');
+                addMessage('');
+
+                const loadouts = [
+                    { name: 'Tactical Gadget', icon: '🔧', desc: 'For when you need to fix Shirley... again', art: ASCII_ART.gadget },
+                    { name: 'Party Supplies', icon: '🎉', desc: '300% more festive, 100% more confetti', art: ASCII_ART.party },
+                    { name: 'Mystery Box', icon: '📦', desc: 'Schrodinger\'s equipment. Could be anything!', art: ASCII_ART.mystery }
+                ];
+
+                let html = '<div class="choice-grid">';
+                loadouts.forEach((item, idx) => {
+                    html += `
+                        <div class="choice-card slide-in" onclick="selectLoadout(${idx})" style="animation-delay: ${idx * 0.1}s">
+                            <div class="ascii-art ascii-small">${item.art}</div>
+                            <div class="title">${item.name}</div>
+                            <div class="desc">${item.desc}</div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                addHTML(html);
+            },
+
+            3: async () => {
+                // Memory gate
+                clearScreen();
+                updateStatus('MEMORY CHECK');
+
+                addHTML('<div class="panel slide-in"><div class="panel-title">💡 MEMORY GATE CHECKPOINT 💡</div></div>');
+                await sleep(400);
+
+                addHTML('<div class="ascii-art">' + ASCII_ART.chicken + '</div>');
+                await sleep(400);
+
+                await typeMessage('Security protocol time! Let\'s verify you actually know Brandon.');
+                addMessage('', 'system');
+                addMessage(CONFIG.memoryQuestion.text, 'highlight');
+                addMessage('');
+
+                const opts = CONFIG.memoryQuestion.options;
+                addHTML(`
+                    <div class="choice-list">
+                        <div class="choice-item" onclick="answerMemory(0)">
+                            <span class="choice-number">[1]</span> ${opts[0]}
+                        </div>
+                        <div class="choice-item" onclick="answerMemory(1)">
+                            <span class="choice-number">[2]</span> ${opts[1]}
+                        </div>
+                        <div class="choice-item" onclick="answerMemory(2)">
+                            <span class="choice-number">[3]</span> ${opts[2]}
+                        </div>
+                    </div>
+                `);
+            },
+
+            4: async () => {
+                // Fork: Tactical vs Chaotic
+                clearScreen();
+                updateStatus('MISSION BRIEF');
+
+                addHTML('<div class="panel slide-in"><div class="panel-title">⚡ CHOOSE YOUR PATH ⚡</div></div>');
+                await sleep(400);
+
+                await typeMessage('Agent, you\'ve made it this far. Impressive.');
+                addMessage('Now comes the big decision: How do you operate?', 'system');
+                addMessage('');
+
+                addHTML(`
+                    <div class="split-screen">
+                        <div class="split-panel tactical slide-in" onclick="choosePath('tactical')">
+                            <div class="ascii-art ascii-small">
+    ╔══════════╗
+    ║ TACTICAL ║
+    ║  ▓▓▓▓▓▓  ║
+    ║  ░Plan░  ║
+    ║  ░────░  ║
+    ╚══════════╝
+                            </div>
+                            <div class="title" style="color: var(--cyan);">TACTICAL APPROACH</div>
+                            <div class="desc">Strategic. Professional. By-the-book.<br>Like actually reading Shirley's manual.</div>
+                        </div>
+                        <div class="split-panel chaotic slide-in" onclick="choosePath('chaotic')" style="animation-delay: 0.2s">
+                            <div class="ascii-art ascii-small">
+    ╔══════════╗
+    ║  CHAOTIC ║
+    ║  ✨💥🔥  ║
+    ║  YOLO!!!  ║
+    ║  ¯\\_(ツ)_/¯║
+    ╚══════════╝
+                            </div>
+                            <div class="title" style="color: var(--purple);">CHAOTIC APPROACH</div>
+                            <div class="desc">Wing it. Improvise. YOLO.<br>Like that time you didn't check Shirley's oil.</div>
+                        </div>
+                    </div>
+                `);
+            },
+
+            5: async () => {
+                // Terminal hacking sequence
+                clearScreen();
+                updateStatus('HACKING...');
+
+                addHTML('<div class="panel slide-in"><div class="panel-title">⚡ COMMAND CENTER ACCESS ⚡</div></div>');
+                await sleep(400);
+
+                const flavor = state.tone === 'tactical'
+                    ? 'Alright, Agent. Execute the command to proceed with mission objectives.'
+                    : 'Time to hack the mainframe! Or... just type something birthday-related. Whatever works.';
+
+                await typeMessage(flavor);
+                addMessage('');
+                addHTML(`
+                    <div class="panel">
+                        <div style="color: var(--green); font-family: monospace;">
+                            <div>BIRTHDAY_PROTOCOL v2.0.26</div>
+                            <div style="color: var(--text-dim);">System Status: AWAITING PARTY COMMAND</div>
+                            <div style="color: var(--text-dim);">Available: BEGIN_PARTY | CELEBRATE | PARTY</div>
+                            <div>───────────────────────────────</div>
+                        </div>
+                    </div>
+                `);
+
+                createPrompt('$', 'type command...', async (value) => {
+                    const cmd = value.toLowerCase();
+                    const valid = ['begin_party', 'party', 'celebrate', 'start_party', 'birthday'].some(v => cmd.includes(v));
+
+                    if (valid) {
+                        addMessage('EXECUTING...', 'system');
+                        await showLoadingBar(1500, 'Hacking the birthday database...');
+                        addMessage('✓ SUCCESS: Party protocols initiated!', 'success');
+                        addMessage('✓ CONFETTI.DLL loaded successfully', 'success');
+                        addMessage('✓ CAKE.EXE is ready to deploy', 'success');
+                        addMessage('🔑 SECURITY KEY AWARDED', 'highlight');
+                        addKey();
+
+                        addHTML(`<div class="stats-display">
+                            <div class="stat-badge">🔑 Keys: <span class="stat-value">${state.keys}/3</span></div>
+                            <div class="stat-badge">⭐ Points: <span class="stat-value">${state.points}</span></div>
+                        </div>`);
+
+                        await sleep(600);
+                        showContinueButton(() => renderScene(6));
+                    } else {
+                        addMessage('ERROR: Command not recognized. Try: BEGIN_PARTY', 'error');
+                        addMessage('(Or just type "party". We\'re not that strict.)', 'roast');
+                        createPrompt('$', 'type command...', arguments.callee);
+                    }
+                });
+            },
+
+            6: async () => {
+                // Compliments with personality
+                clearScreen();
+                updateStatus('ANALYZING...');
+
+                addHTML('<div class="panel slide-in"><div class="panel-title">📂 CLASSIFIED FILE ACCESSED</div></div>');
+                await sleep(400);
+
+                addHTML('<div class="ascii-art">' + ASCII_ART.fortuneTeller + '</div>');
+                await sleep(400);
+
+                await typeMessage(`Intelligence has compiled data on subject: ${state.brotherName}`);
+                addMessage('Prepare yourself. These are... surprisingly nice.', 'roast');
+                addMessage('');
+
+                for (let i = 0; i < CONFIG.compliments.length; i++) {
+                    await sleep(600);
+                    addHTML(`
+                        <div class="panel slide-in">
+                            <div style="color: var(--green); margin-bottom: 8px;">ENTRY ${i + 1}/3:</div>
+                            <div style="color: var(--text);">${CONFIG.compliments[i]}</div>
+                        </div>
+                    `);
+                }
+
+                await sleep(800);
+                addMessage('');
+                addMessage('How do you respond to this assessment?', 'highlight');
+                addMessage('');
+
+                addHTML(`
+                    <div class="choice-list">
+                        <div class="choice-item" onclick="respondCompliments('downplay')">
+                            <span class="choice-number">[1]</span> "Eh, you're exaggerating..."
+                        </div>
+                        <div class="choice-item" onclick="respondCompliments('accept')">
+                            <span class="choice-number">[2]</span> "I appreciate that. Thank you."
+                        </div>
+                    </div>
+                `);
+            },
+
+            7: async () => {
+                // Year ahead predictions
+                clearScreen();
+                updateStatus('FORTUNE READING');
+
+                addHTML('<div class="panel slide-in"><div class="panel-title">🔮 YEAR AHEAD PROJECTION SYSTEM 🔮</div></div>');
+                await sleep(400);
+
+                addHTML('<div class="ascii-art">' + ASCII_ART.car + '</div>');
+                await sleep(400);
+
+                const intro = state.tone === 'tactical'
+                    ? 'Time for strategic planning. Select your primary objective for the year ahead:'
+                    : 'Alright, birthday boy. What chaos are we manifesting this year?';
+
+                await typeMessage(intro);
+                addMessage('');
+
+                addHTML(`
+                    <div class="choice-list">
+                        <div class="choice-item" onclick="selectWish(0)">
+                            <span class="choice-number">[1]</span> ${CONFIG.yearAheadWishes[0]}
+                        </div>
+                        <div class="choice-item" onclick="selectWish(1)">
+                            <span class="choice-number">[2]</span> ${CONFIG.yearAheadWishes[1]}
+                        </div>
+                        <div class="choice-item" onclick="selectWish(2)">
+                            <span class="choice-number">[3]</span> ${CONFIG.yearAheadWishes[2]}
+                        </div>
+                    </div>
+                `);
+            },
+
+            8: async () => {
+                // Final checkpoint
+                clearScreen();
+                updateStatus('CHECKPOINT');
+
+                addHTML('<div class="panel slide-in"><div class="panel-title">🔒 FINAL SECURITY CHECKPOINT</div></div>');
+                await sleep(400);
+
+                if (state.keys >= 2) {
+                    addHTML('<div class="ascii-art ascii-large" style="color: var(--green);">✓ ✓ ✓</div>');
+                    await sleep(400);
+
+                    await typeMessage('Your accumulated keys have unlocked the final checkpoint!');
+                    addMessage('✓ ACCESS GRANTED', 'success');
+                    addMessage('');
+                    addHTML(`<div class="stats-display">
+                        <div class="stat-badge">🔑 Keys: <span class="stat-value">${state.keys}/3</span></div>
+                        <div class="stat-badge">⭐ Points: <span class="stat-value">${state.points}</span></div>
+                    </div>`);
+
+                    await sleep(1200);
+                    addMessage('PROCEEDING TO BIRTHDAY REVEAL...', 'highlight');
+                    await sleep(1000);
+                    addMessage('');
+                    showContinueButton(() => renderScene(9));
+                } else {
+                    addHTML('<div class="ascii-art">' + ASCII_ART.lock + '</div>');
+                    await sleep(400);
+
+                    addMessage('🔒 CHECKPOINT LOCKED', 'warning');
+                    addMessage('');
+                    addMessage('INSUFFICIENT AUTHORIZATION', 'error');
+                    addMessage(`Keys required: 2`, 'system');
+                    addMessage(`Keys obtained: ${state.keys}`, 'system');
+                    addMessage('');
+                    addMessage('💡 HINT: Type "override" to bypass (we believe in you)', 'system');
+                    addMessage('');
+
+                    createPrompt('>', '', async (value) => {
+                        if (value.toLowerCase().includes('override') || value.toLowerCase().includes('bypass')) {
+                            addMessage('INITIATING OVERRIDE SEQUENCE...', 'system');
+                            await showLoadingBar(1500, 'Bypassing security...');
+                            addMessage('✓ OVERRIDE SUCCESSFUL', 'success');
+                            addMessage('🔑 FINAL KEY AWARDED (for determination)', 'highlight');
+                            addKey();
+                            await sleep(1000);
+                            addMessage('');
+                            showContinueButton(() => renderScene(9));
+                        } else {
+                            addMessage('ERROR: Invalid command. Type "override"', 'error');
+                            createPrompt('>', '', arguments.callee);
+                        }
+                    });
+                }
+            },
+
+            9: async () => {
+                // Birthday reveal!
+                clearScreen();
+                updateStatus('🎉 COMPLETE 🎉');
+
+                addHTML('<div class="ascii-art ascii-large slide-in" style="color: var(--green);">' + ASCII_ART.birthdayCake + '</div>');
+                await sleep(800);
+
+                addMessage('');
+                addMessage('═════════════════════════════════════════', 'highlight');
+                addMessage(`🎂 HAPPY ${CONFIG.age}TH BIRTHDAY, ${state.brotherName.toUpperCase()}! 🎂`, 'success');
+                addMessage('═════════════════════════════════════════', 'highlight');
+                addMessage('');
+
+                await sleep(600);
+
+                addHTML(`
+                    <div class="panel slide-in" style="background: linear-gradient(135deg, rgba(0, 255, 156, 0.1), rgba(0, 217, 255, 0.1)); border-color: var(--green);">
+                        <div style="line-height: 1.8; color: var(--text); font-size: 1.05rem;">
+                            ${CONFIG.finalMessage}
+                        </div>
+                    </div>
+                `);
+
+                await sleep(1000);
+
+                addMessage('');
+                addMessage('═══ MISSION STATISTICS ═══', 'highlight');
+                addHTML(`
+                    <div class="stats-display">
+                        <div class="stat-badge">🔑 Keys: <span class="stat-value">${state.keys}/3</span></div>
+                        <div class="stat-badge">⭐ Points: <span class="stat-value">${state.points}</span></div>
+                    </div>
+                    <div class="stats-display">
+                        <div class="stat-badge">👤 Codename: <span class="stat-value">${state.playerCodename}</span></div>
+                        <div class="stat-badge">🎯 Style: <span class="stat-value">${state.tone === 'tactical' ? 'Tactical' : 'Chaotic'}</span></div>
+                    </div>
+                    <div class="stats-display">
+                        <div class="stat-badge">🔧 Loadout: <span class="stat-value">${state.loadout}</span></div>
+                    </div>
+                `);
+
+                if (CONFIG.rewardURL) {
+                    await sleep(800);
+                    addMessage('');
+                    addHTML(`
+                        <div class="panel slide-in" style="text-align: center; cursor: pointer; border-color: var(--cyan);" onclick="window.open('${CONFIG.rewardURL}', '_blank')">
+                            <div class="panel-title" style="color: var(--cyan); font-size: 1.3rem;">
+                                ${CONFIG.rewardLinkText}
+                            </div>
+                            <div style="color: var(--text-dim); margin-top: 8px;">Click to open →</div>
+                        </div>
+                    `);
+                }
+
+                await sleep(1000);
+                addMessage('');
+                addMessage('Type "reset" to play again, or just bask in the glory. 😎', 'system');
+                addMessage('');
+
+                createPrompt('>', '', async (value) => {
+                    createPrompt('>', '', arguments.callee);
+                });
+            }
+        };
+
+        // Global helper functions
+        window.selectLoadout = async function (index) {
+            const loadouts = [
+                { name: 'Tactical Gadget', msg: 'Solid choice. When Shirley breaks down (again), you\'ll be ready.' },
+                { name: 'Party Supplies', msg: 'NOW we\'re talking! This mission just got 300% more festive. 🎉' },
+                { name: 'Mystery Box', msg: 'Bold. It could be anything! (Spoiler: It\'s definitely glitter. It\'s always glitter.)' }
+            ];
+
+            const selected = loadouts[index];
+            state.loadout = selected.name;
+            saveState();
+            addPoints(50);
+
+            addMessage('');
+            addMessage(`✓ LOADOUT "${selected.name}" EQUIPPED`, 'success');
+            await sleep(400);
+            addMessage(selected.msg, 'roast');
+
+            addHTML(`<div class="stats-display">
+                <div class="stat-badge">🔑 Keys: <span class="stat-value">${state.keys}/3</span></div>
+                <div class="stat-badge">⭐ Points: <span class="stat-value">${state.points}</span></div>
+            </div>`);
+
+            await sleep(600);
+            showContinueButton(() => renderScene(3));
+        };
+
+        window.answerMemory = async function (index) {
+            const correct = index === CONFIG.memoryQuestion.correctIndex;
+
+            addMessage('');
+            addMessage('ANALYZING RESPONSE...', 'system');
+            await sleep(800);
+
+            if (correct) {
+                addMessage('✓ MEMORY VERIFIED!', 'success');
+                await sleep(400);
+                addMessage('Correct! The chicken farm under the bed is legendary. 🐔', 'roast');
+                addMessage('May it grow into a full rotisserie someday.', 'roast');
+                addMessage('🔑 SECURITY KEY AWARDED', 'highlight');
+                addKey();
+            } else {
+                addMessage('✗ MEMORY... QUESTIONABLE', 'warning');
+                await sleep(400);
+                addMessage('Not quite, but honestly, the chicken joke is so absurd I don\'t blame you.', 'roast');
+                addMessage('Proceeding anyway because I\'m nice like that.', 'system');
+                addPoints(25);
+            }
+
+            addHTML(`<div class="stats-display">
+                <div class="stat-badge">🔑 Keys: <span class="stat-value">${state.keys}/3</span></div>
+                <div class="stat-badge">⭐ Points: <span class="stat-value">${state.points}</span></div>
+            </div>`);
+
+            await sleep(600);
+            showContinueButton(() => renderScene(4));
+        };
+
+        window.choosePath = async function (path) {
+            state.tone = path;
+            saveState();
+            addPoints(50);
+
+            addMessage('');
+            addMessage(`✓ ${path.toUpperCase()} MODE ENGAGED`, 'success');
+            await sleep(400);
+
+            if (path === 'tactical') {
+                addMessage('Mission parameters locked. Efficiency mode activated.', 'system');
+                addMessage('You\'re like the guy who actually reads instruction manuals.', 'roast');
+            } else {
+                addMessage('Chaos mode activated. All bets are off. This should be interesting.', 'system');
+                addMessage('Classic Brandy move. I respect it.', 'roast');
+            }
+
+            addHTML(`<div class="stats-display">
+                <div class="stat-badge">🔑 Keys: <span class="stat-value">${state.keys}/3</span></div>
+                <div class="stat-badge">⭐ Points: <span class="stat-value">${state.points}</span></div>
+            </div>`);
+
+            await sleep(600);
+            showContinueButton(() => renderScene(5));
+        };
+
+        window.respondCompliments = async function (response) {
+            const points = response === 'accept' ? 100 : 50;
+            addPoints(points);
+
+            addMessage('');
+            addMessage('RESPONSE LOGGED', 'success');
+            await sleep(400);
+
+            if (response === 'downplay') {
+                addMessage('Classic humble move. But seriously, own your strengths more.', 'roast');
+                addMessage('The "hey sibs" thing? That matters. Don\'t downplay it.', 'system');
+            } else {
+                addMessage('Now THAT\'S what I like to see! Confidence looks good on you.', 'success');
+                addMessage('Keep that energy. You\'ve earned it.', 'system');
+            }
+
+            addMessage(`+${points} PROTOCOL POINTS`, 'highlight');
+
+            addHTML(`<div class="stats-display">
+                <div class="stat-badge">🔑 Keys: <span class="stat-value">${state.keys}/3</span></div>
+                <div class="stat-badge">⭐ Points: <span class="stat-value">${state.points}</span></div>
+            </div>`);
+
+            await sleep(600);
+            showContinueButton(() => renderScene(7));
+        };
+
+        window.selectWish = async function (index) {
+            const wish = CONFIG.yearAheadWishes[index];
+            addPoints(100);
+
+            addMessage('');
+            addMessage('GENERATING PREDICTION...', 'system');
+            await showLoadingBar(1800, 'Consulting the birthday oracle...');
+
+            addMessage('');
+            addMessage('SELECTED VISION:', 'highlight');
+            addMessage(wish, 'success');
+            addMessage('');
+
+            const predictions = [
+                state.tone === 'tactical'
+                    ? `With your ${state.loadout} and strategic approach, that dream car is actually in reach. Plan smart, save strategically, and by Q3 you could be test-driving. Shirley will understand.`
+                    : `Alright, with your ${state.loadout} and chaotic energy, the dream car manifestation is ON. Will it happen smoothly? Probably not. Will it make a great story? Absolutely. Shirley might be jealous though.`,
+
+                state.tone === 'tactical'
+                    ? `Your ${state.loadout} represents preparedness. The Paris situation should resolve itself naturally, and Shirley? Regular oil changes and you're golden. Balance is achievable.`
+                    : `Look, ${state.loadout} and chaos mode? This year's going to be a RIDE. You might end up loving Paris unexpectedly, or Shirley might finally behave. Either way, buckle up.`,
+
+                state.tone === 'tactical'
+                    ? `With ${state.loadout} and tactical planning, you're set for steady growth. Unexpected wins will come from consistent effort. The universe rewards preparation.`
+                    : `Honestly? ${state.loadout} plus chaotic energy equals a beautiful disaster of growth. This year will be messy, amazing, and you'll have stories for DAYS. Embrace it.`
+            ];
+
+            addMessage('PREDICTION GENERATED:', 'highlight');
+            await sleep(400);
+            await typeMessage(predictions[index], 'system', 15);
+
+            addMessage('');
+            addHTML(`<div class="stats-display">
+                <div class="stat-badge">🔑 Keys: <span class="stat-value">${state.keys}/3</span></div>
+                <div class="stat-badge">⭐ Points: <span class="stat-value">${state.points}</span></div>
+            </div>`);
+
+            await sleep(600);
+            showContinueButton(() => renderScene(8));
+        };
+
+        function renderScene(sceneNum) {
+            state.currentScene = sceneNum;
+            saveState();
+            SCENES[sceneNum]();
+        }
+
+        // Initialize
+        window.addEventListener('DOMContentLoaded', () => {
+            loadState();
+            initMatrixRain();
+
+            const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (prefersReducedMotion) {
+                state.typewriterEnabled = false;
+                state.effectsEnabled = false;
+                document.body.classList.add('no-effects');
+            }
+
+            renderScene(state.currentScene);
+        });
+    </script>
+</body>
+
+</html>
